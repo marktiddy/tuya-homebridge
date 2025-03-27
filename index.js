@@ -1,20 +1,21 @@
 const TuyaOpenAPI = require("./lib/tuyaopenapi");
 const TuyaSHOpenAPI = require("./lib/tuyashopenapi");
 const TuyaOpenMQ = require("./lib/tuyamqttapi");
-const OutletAccessory = require('./lib/outlet_accessory');
-const LightAccessory = require('./lib/light_accessory');
-const SwitchAccessory = require('./lib/switch_accessory');
-const SmokeSensorAccessory = require('./lib/smokesensor_accessory');
-const Fanv2Accessory = require('./lib/fanv2_accessory');
-const HeaterAccessory = require('./lib/heater_accessory');
-const GarageDoorAccessory = require('./lib/garagedoor_accessory');
-const AirPurifierAccessory = require('./lib/air_purifier_accessory')
-const WindowCoveringAccessory = require('./lib/window_covering_accessory')
-const ContactSensorAccessory = require('./lib/contactsensor_accessory');
-const LeakSensorAccessory = require('./lib/leak_sensor_accessory')
+const OutletAccessory = require("./lib/outlet_accessory");
+const LightAccessory = require("./lib/light_accessory");
+const SwitchAccessory = require("./lib/switch_accessory");
+const SmokeSensorAccessory = require("./lib/smokesensor_accessory");
+const Fanv2Accessory = require("./lib/fanv2_accessory");
+const HeaterAccessory = require("./lib/heater_accessory");
+const GarageDoorAccessory = require("./lib/garagedoor_accessory");
+const AirPurifierAccessory = require("./lib/air_purifier_accessory");
+const DuctlessAirConditionerAccessory = require("./lib/ductless_air_conditioner_accessory");
+const WindowCoveringAccessory = require("./lib/window_covering_accessory");
+const ContactSensorAccessory = require("./lib/contactsensor_accessory");
+const LeakSensorAccessory = require("./lib/leak_sensor_accessory");
 
-const LogUtil = require('./util/logutil')
-const DataUtil = require('./util/datautil')
+const LogUtil = require("./util/logutil");
+const DataUtil = require("./util/datautil");
 
 var Accessory, Service, Characteristic;
 
@@ -23,18 +24,21 @@ module.exports = function (homebridge) {
   Service = homebridge.hap.Service;
   Characteristic = homebridge.hap.Characteristic;
   // registerAccessory' three parameters is plugin-name, accessory-name, constructor-name
-  homebridge.registerPlatform('homebridge-tuya-platform', 'TuyaPlatform', TuyaPlatform, true);
-}
+  homebridge.registerPlatform(
+    "homebridge-tuya-platform",
+    "TuyaPlatform",
+    TuyaPlatform,
+    true,
+  );
+};
 
 // Accessory constructor
 class TuyaPlatform {
   constructor(log, config, api) {
-    this.log = new LogUtil(
-      config.options.debug,
-    );
+    this.log = new LogUtil(config.options.debug);
     this.config = config;
     if (!config || !config.options) {
-      this.log.log('The config configuration is incorrect, disabling plugin.')
+      this.log.log("The config configuration is incorrect, disabling plugin.");
       return;
     }
     this.deviceAccessories = new Map();
@@ -46,17 +50,20 @@ class TuyaPlatform {
       // Listen to event "didFinishLaunching", this means homebridge already finished loading cached accessories.
       // Platform Plugin should only register new accessory that doesn't exist in homebridge after this event.
       // Or start discover new accessories.
-      this.api.on('didFinishLaunching', function () {
-        this.log.log("Initializing TuyaPlatform...");
-        this.initTuyaSDK(config);
-      }.bind(this));
+      this.api.on(
+        "didFinishLaunching",
+        function () {
+          this.log.log("Initializing TuyaPlatform...");
+          this.initTuyaSDK(config);
+        }.bind(this),
+      );
     }
   }
 
   async initTuyaSDK(config) {
-    let devices
-    let api
-    if (config.options.projectType == '1') {
+    let devices;
+    let api;
+    if (config.options.projectType == "1") {
       api = new TuyaOpenAPI(
         config.options.endPoint,
         config.options.accessId,
@@ -71,7 +78,9 @@ class TuyaPlatform {
         devices = await api.getDeviceList();
       } catch (e) {
         // this.log.log(JSON.stringify(e.message));
-        this.log.log('Failed to get device information. Please check if the config.json is correct.')
+        this.log.log(
+          "Failed to get device information. Please check if the config.json is correct.",
+        );
         return;
       }
     } else {
@@ -87,10 +96,12 @@ class TuyaPlatform {
       this.tuyaOpenApi = api;
 
       try {
-        devices = await api.getDevices()
+        devices = await api.getDevices();
       } catch (e) {
         // this.log.log(JSON.stringify(e.message));
-        this.log.log('Failed to get device information. Please check if the config.json is correct.')
+        this.log.log(
+          "Failed to get device information. Please check if the config.json is correct.",
+        );
         return;
       }
     }
@@ -99,7 +110,7 @@ class TuyaPlatform {
       this.addAccessory(device);
     }
 
-    const type = config.options.projectType == "1" ? "2.0" : "1.0"
+    const type = config.options.projectType == "1" ? "2.0" : "1.0";
     let mq = new TuyaOpenMQ(api, type, this.log);
     this.tuyaOpenMQ = mq;
     this.tuyaOpenMQ.start();
@@ -108,106 +119,167 @@ class TuyaPlatform {
 
   addAccessory(device) {
     var deviceType = device.category;
-    this.log.log(`Adding: ${device.name || 'unnamed'} (${deviceType} / ${device.id})`);
+    this.log.log(
+      `Adding: ${device.name || "unnamed"} (${deviceType} / ${device.id})`,
+    );
     // Get UUID
     const uuid = this.api.hap.uuid.generate(device.id);
     const homebridgeAccessory = this.accessories.get(uuid);
 
     // Construct new accessory
     let deviceAccessory;
+
     switch (deviceType) {
-      case 'kj':
-        deviceAccessory = new AirPurifierAccessory(this, homebridgeAccessory, device);
+      case "ks":
+        this.tuyaOpenApi.getACStatus(device.id).then((res) => {
+          if (res) {
+            device.status = res.properties;
+          }
+
+          deviceAccessory = new DuctlessAirConditionerAccessory(
+            this,
+            homebridgeAccessory,
+            device,
+          );
+          this.accessories.set(uuid, deviceAccessory.homebridgeAccessory);
+          this.deviceAccessories.set(uuid, deviceAccessory);
+        });
+
+        break;
+      case "kj":
+        deviceAccessory = new AirPurifierAccessory(
+          this,
+          homebridgeAccessory,
+          device,
+        );
         this.accessories.set(uuid, deviceAccessory.homebridgeAccessory);
         this.deviceAccessories.set(uuid, deviceAccessory);
         break;
-      case 'dj':
-      case 'dd':
-      case 'fwd':
-      case 'tgq':
-      case 'xdd':
-      case 'dc':
-      case 'tgkg':
+      case "dj":
+      case "dd":
+      case "fwd":
+      case "tgq":
+      case "xdd":
+      case "dc":
+      case "tgkg":
         deviceAccessory = new LightAccessory(this, homebridgeAccessory, device);
         this.accessories.set(uuid, deviceAccessory.homebridgeAccessory);
         this.deviceAccessories.set(uuid, deviceAccessory);
         break;
-      case 'cz':
-      case 'pc':
-        var deviceData = new DataUtil().getSubService(device.status)
-        deviceAccessory = new OutletAccessory(this, homebridgeAccessory, device, deviceData);
+      case "cz":
+      case "pc":
+        var deviceData = new DataUtil().getSubService(device.status);
+        deviceAccessory = new OutletAccessory(
+          this,
+          homebridgeAccessory,
+          device,
+          deviceData,
+        );
         this.accessories.set(uuid, deviceAccessory.homebridgeAccessory);
         this.deviceAccessories.set(uuid, deviceAccessory);
         break;
-      case 'kg':
-      case 'tdq':
-        var deviceData = new DataUtil().getSubService(device.status)
-        deviceAccessory = new SwitchAccessory(this, homebridgeAccessory, device, deviceData);
+      case "kg":
+      case "tdq":
+        var deviceData = new DataUtil().getSubService(device.status);
+        deviceAccessory = new SwitchAccessory(
+          this,
+          homebridgeAccessory,
+          device,
+          deviceData,
+        );
         this.accessories.set(uuid, deviceAccessory.homebridgeAccessory);
         this.deviceAccessories.set(uuid, deviceAccessory);
         break;
-      case 'fs':
-      case 'fskg':
+      case "fs":
+      case "fskg":
         deviceAccessory = new Fanv2Accessory(this, homebridgeAccessory, device);
         this.accessories.set(uuid, deviceAccessory.homebridgeAccessory);
         this.deviceAccessories.set(uuid, deviceAccessory);
         break;
-      case 'ywbj':
-        deviceAccessory = new SmokeSensorAccessory(this, homebridgeAccessory, device);
+      case "ywbj":
+        deviceAccessory = new SmokeSensorAccessory(
+          this,
+          homebridgeAccessory,
+          device,
+        );
         this.accessories.set(uuid, deviceAccessory.homebridgeAccessory);
         this.deviceAccessories.set(uuid, deviceAccessory);
         break;
-      case 'qn':
-        deviceAccessory = new HeaterAccessory(this, homebridgeAccessory, device);
+      case "qn":
+        deviceAccessory = new HeaterAccessory(
+          this,
+          homebridgeAccessory,
+          device,
+        );
         this.accessories.set(uuid, deviceAccessory.homebridgeAccessory);
         this.deviceAccessories.set(uuid, deviceAccessory);
         break;
-      case 'ckmkzq': //garage_door_opener
-        deviceAccessory = new GarageDoorAccessory(this, homebridgeAccessory, device);
+      case "ckmkzq": //garage_door_opener
+        deviceAccessory = new GarageDoorAccessory(
+          this,
+          homebridgeAccessory,
+          device,
+        );
         this.accessories.set(uuid, deviceAccessory.homebridgeAccessory);
         this.deviceAccessories.set(uuid, deviceAccessory);
         break;
-      case 'cl':
-        deviceAccessory = new WindowCoveringAccessory(this, homebridgeAccessory, device);
+      case "cl":
+        deviceAccessory = new WindowCoveringAccessory(
+          this,
+          homebridgeAccessory,
+          device,
+        );
         this.accessories.set(uuid, deviceAccessory.homebridgeAccessory);
         this.deviceAccessories.set(uuid, deviceAccessory);
         break;
-      case 'mcs':
-        deviceAccessory = new ContactSensorAccessory(this, homebridgeAccessory, device);
+      case "mcs":
+        deviceAccessory = new ContactSensorAccessory(
+          this,
+          homebridgeAccessory,
+          device,
+        );
         this.accessories.set(uuid, deviceAccessory.homebridgeAccessory);
         this.deviceAccessories.set(uuid, deviceAccessory);
         break;
-      case 'rqbj':
-      case 'jwbj':
-        deviceAccessory = new LeakSensorAccessory(this, homebridgeAccessory, device);
+      case "rqbj":
+      case "jwbj":
+      case "sj":
+        deviceAccessory = new LeakSensorAccessory(
+          this,
+          homebridgeAccessory,
+          device,
+        );
         this.accessories.set(uuid, deviceAccessory.homebridgeAccessory);
         this.deviceAccessories.set(uuid, deviceAccessory);
         break;
       default:
         break;
     }
-
   }
 
   //Handle device deletion, addition, status update
   async onMQTTMessage(message) {
     if (message.bizCode) {
-      if (message.bizCode == 'delete') {
+      if (message.bizCode == "delete") {
         const uuid = this.api.hap.uuid.generate(message.devId);
         const homebridgeAccessory = this.accessories.get(uuid);
-        this.removeAccessory(homebridgeAccessory)
-      } else if (message.bizCode == 'bindUser') {
-        let deviceInfo = await this.tuyaOpenApi.getDeviceInfo(message.bizData.devId)
-        let functions = await this.tuyaOpenApi.getDeviceFunctions(message.bizData.devId)
+        this.removeAccessory(homebridgeAccessory);
+      } else if (message.bizCode == "bindUser") {
+        let deviceInfo = await this.tuyaOpenApi.getDeviceInfo(
+          message.bizData.devId,
+        );
+        let functions = await this.tuyaOpenApi.getDeviceFunctions(
+          message.bizData.devId,
+        );
         let device = Object.assign(deviceInfo, functions);
-        this.addAccessory(device)
+        this.addAccessory(device);
       }
     } else {
-      this.refreshDeviceStates(message)
+      this.refreshDeviceStates(message);
     }
   }
 
-  //refresh Accessorie status
+  //refresh Accessories status
   async refreshDeviceStates(message) {
     const uuid = this.api.hap.uuid.generate(message.devId);
     const deviceAccessorie = this.deviceAccessories.get(uuid);
@@ -218,8 +290,14 @@ class TuyaPlatform {
 
   // Called from device classes
   registerPlatformAccessory(platformAccessory) {
-    this.log.log(`Register Platform Accessory ${platformAccessory.displayName}`);
-    this.api.registerPlatformAccessories('homebridge-tuya-platform', 'TuyaPlatform', [platformAccessory]);
+    this.log.log(
+      `Register Platform Accessory ${platformAccessory.displayName}`,
+    );
+    this.api.registerPlatformAccessories(
+      "homebridge-tuya-platform",
+      "TuyaPlatform",
+      [platformAccessory],
+    );
   }
 
   // Function invoked when homebridge tries to restore cached accessory.
@@ -231,7 +309,7 @@ class TuyaPlatform {
     // otherwise set to false and update the reachability later by invoking
     // accessory.updateReachability()
     accessory.reachable = true;
-    accessory.on('identify', function (paired, callback) {
+    accessory.on("identify", function (paired, callback) {
       // this.log.debug('[IDENTIFY][%s]', accessory.displayName);
       callback();
     });
@@ -242,7 +320,11 @@ class TuyaPlatform {
   removeAccessory(accessory) {
     if (accessory) {
       this.log.log(`Remove Accessory ${accessory}`);
-      this.api.unregisterPlatformAccessories("homebridge-tuya-platform", "TuyaPlatform", [accessory]);
+      this.api.unregisterPlatformAccessories(
+        "homebridge-tuya-platform",
+        "TuyaPlatform",
+        [accessory],
+      );
       this.accessories.delete(accessory.uuid);
       this.deviceAccessories.delete(accessory.uuid);
     }
