@@ -12,6 +12,7 @@ This product exposes 6 items to the Apple Home app grouped as one:
 2. A Light to turn off the device light
 3. A humidity sensor that receives device humidity
 4. 3 Switches which toggle the fan, cool and dehumidifier modes as fans in Apple Home do not support modes natively.
+5. In fan mode 25% or below is sleep (long lasting mode), 25-50% is gentle, 50-75% is high and 75%+ is super.
 
 ## Original Readme
 
